@@ -19,7 +19,7 @@ mentre un thread aggiorna la tabella, nessun altro thread puo' nemmeno leggerla,
 l'attesa richiesta dalle specifiche.
 */
 
-public class AggregatorState {
+public class AggregatorRegistry {
 
     /* Informazioni su un nodo registrato.
     peerId, host e porta sono "final" per evitare modifiche accidentali fuori dal monitor;
