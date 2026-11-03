@@ -7,10 +7,12 @@ import java.util.List;
  * Registro che tiene traccia di tutte le richieste di download effettuate,
  * utile per mostrare la cronologia quando viene digitato il comando "log" dell'aggregatore.
  *
- * Risorsa condivisa: scritta dai NodeHandler (N thread), letta dalla console.
- * Monitor: l'istanza stessa. Nessun wait(): solo mutua esclusione. Il suo monitor e'
- * indipendente da quello della tabella: scrivere una riga di log non deve mai far attendere
- * una listdata, e viceversa.
+ * È una risorsa condivisa dai NodeHandler (N thread), letta dalla console.
+ * Utilizza metodi synchronized per garantire la mutua esclusione:
+ * i thread accedono ai dati uno alla volta per evitare conflitti, senza l'uso di wait().
+ * la sincronizzazione di questa classe è completamente indipendente da 
+ * quella della tabella, così la scrittura dei log non blocca mai le operazioni 
+ * sui dati e viceversa.
  */
 public class DownloadLog {
 
@@ -47,7 +49,7 @@ public class DownloadLog {
         voci.add(voce);
     }
 
-    /** Copia formattata delle voci: nessun riferimento interno esce dal monitor. */
+    /** Restituisce una copia formattata delle voci, proteggendo la lista interna da modifiche esterne. */
     public synchronized List<String> righe() {
         ArrayList<String> copia = new ArrayList<>();
         for (Voce v : voci) {
