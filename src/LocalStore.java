@@ -10,8 +10,8 @@ import java.util.List;
  * Archivio locale delle rilevazioni di un nodo: ogni rilevazione e' un file <nome>.txt nella
  * cartella dati del nodo, piu' un indice dei nomi tenuto in memoria (ordinato).
  *
- * Risorsa condivisa: usata dalla console, dal DownloadManager (stesso thread) e dai
- * PeerHandler (N thread). Monitor: l'istanza. Nessun wait(): solo mutua esclusione.
+ * Risorsa condivisa: usata dalla console, dal RetrievalCoordinator (stesso thread) e dai
+ * FetchWorker (N thread). Monitor: l'istanza. Nessun wait(): solo mutua esclusione.
  *
  * L'I/O su file LOCALE avviene dentro il monitor: e' una deroga consapevole alla regola
  * "niente I/O sotto monitor", che riguarda l'I/O di RETE (durata illimitata, dipende da una

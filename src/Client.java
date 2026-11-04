@@ -10,7 +10,7 @@ import java.util.List;
  * La cartella dati (default "data/nodo") contiene le rilevazioni del nodo come file <nome>.txt.
  * Per avviare piu' nodi sulla stessa macchina basta indicare una cartella diversa per ciascuno.
  *
- * Thread: main (= ClientConsole), PeerServer, un PeerHandler per ogni FETCH in ingresso.
+ * Thread: main (= ClientConsole), NodeListener, un PeerHandler per ogni FETCH in ingresso.
  */
 public class Client {
 
@@ -49,10 +49,10 @@ public class Client {
         }
 
         LocalStore store = new LocalStore(cartella);
-        PeerServer peerServer = null;
+        NodeListener peerServer = null;
         AggregatorLink link = null;
         try {
-            peerServer = new PeerServer(store);
+            peerServer = new NodeListener(store);
             link = new AggregatorLink(socket);
         } catch (IOException e) {
             System.err.println("Errore: impossibile inizializzare il nodo: " + e.getMessage());
@@ -60,7 +60,7 @@ public class Client {
         }
         peerServer.start();                        // gia' in ascolto prima della REGISTER
 
-        // 3) REGISTER: l'host lo ricava l'aggregatore, la porta e' quella del PeerServer
+        // 3) REGISTER: l'host lo ricava l'aggregatore, la porta e' quella del NodeListener
         List<String> locali = store.elenco();
         String peerId = null;
         try {
@@ -86,7 +86,10 @@ public class Client {
                 + " rilevazioni). Digita 'help' per i comandi.");
 
         // 4) console interattiva sul thread main
-        DownloadManager download = new DownloadManager(peerId, link, store);
+        final AggregatorLink uplink = link;   // copia che non cambia più, usabile nella lambda
+        RetrievalCoordinator download = new RetrievalCoordinator(peerId,
+                richiesta -> uplink.invia(richiesta, null).intestazione,
+                store);
         new ClientConsole(peerId, link, store, download, peerServer).esegui();
     }
 }
