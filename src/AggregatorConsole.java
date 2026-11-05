@@ -4,8 +4,10 @@ import java.io.InputStreamReader;
 import java.util.List;
 
 /**
- * Thread della console dell'aggregatore: legge stdin e gestisce listdata, log, quit, help.
- * BufferedReader e' ammesso solo qui, su System.in (mai sui socket).
+ * Thread della console dell'aggregatore: legge dallo standard input (stdin) 
+ * e gestisce i comandi interattivi (listdata, log, quit, help).
+ * Nota: l'uso di BufferedReader è consentito esclusivamente qui su System.in 
+ * e non deve essere utilizzato sui socket.
  */
 public class AggregatorConsole extends Thread {
 
