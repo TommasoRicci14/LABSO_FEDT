@@ -4,15 +4,15 @@
     import java.util.ArrayList;
 
     /**
-     * Nodo aggregatore principale del sistema distribuito ---> cosa intendi per sistema distribuito?
+     * Nodo aggregatore principale del sistema distribuito 
      *
      * Si occupa di inizializzare il server sulla porta indicata, gestire il ciclo 
      * di accettazione delle connessioni (accept loop) in ambiente multithreading 
      * e coordinare la chiusura ordinata dell'intera applicazione.
      * 
      * Gestisce inoltre i riferimenti agli oggetti condivisi protetti da monitor:
-     * - AggregatorState (Meccanismo 1 - Stato e lock centralizzati)
-     * - TokenManager (Meccanismo 3 - Gestione token di accesso)
+     * - AggregatorRegistry (Meccanismo 1 - Stato e lock centralizzati)
+     * - PeerLockManager (Meccanismo 3 - Gestione token di accesso)
      * - DownloadLog (Registro storico delle operazioni di download)
      * 
      * Avvio da riga di comando: java -cp bin Aggregator <porta>
@@ -20,8 +20,8 @@
     public class Aggregator {
 
         private final ServerSocket serverSocket;
-        private final AggregatorState stato = new AggregatorState();
-        private final TokenManager token = new TokenManager();
+        private final AggregatorRegistry stato = new AggregatorRegistry();
+        private final PeerLockManager token = new PeerLockManager();
         private final DownloadLog log = new DownloadLog();
 
         // Lista dei thread NodeHandler vivi: protetta da synchronized (handlers) corti.
