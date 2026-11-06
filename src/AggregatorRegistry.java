@@ -10,13 +10,22 @@ import java.util.TreeSet;
 /*
 MECCANISMO 1: Tabella delle rilevazioni dell'aggregatore, in mutua esclusione TOTALE.
 
-Questa è una classe "passiva": i suoi metodi toccano solo i propri dati e restituiscono un risultato.
-Non fanno mai chiamate di rete (I/O) e non chiamano altri oggetti sincronizzati.
-Ogni metodo dura pochi microsecondi.
+COSA CONTIENE
+- possessori: per ogni risorsa (rilevazione), la lista dei peer che la possiedono.
+- registro: per ogni peer, il suo indirizzo (host, porta) e se è ancora attivo.
 
-Tutti i metodi pubblici sono synchronized. Questo significa che il monitor è l'istanza stessa:
-mentre un thread aggiorna la tabella, nessun altro thread puo' nemmeno leggerla, realizzando esattamente
-l'attesa richiesta dalle specifiche.
+PERCHÉ SERVE LA SINCRONIZZAZIONE
+L'aggregatore ha un thread per ogni nodo connesso (NodeHandler). Tutti questi thread
+leggono e modificano quetsa stessa tabella. Senza protezione, due thread che la toccano
+insieme potrebbero lasciarla in uno stato corrotto (es. due REGISTER simultanee che
+assegnano lo stesso peerId). Per evitarlo, tutti i metodi pubblici sono synchronized:
+il "monitor" è l'istanza stessa, e solo UN thread alla volta può essere dentro uno
+qualunque di questi metodi.
+
+CLASSE "PASSIVA"
+I suoi metodi toccano solo i propri dati e ritornano un risultato.
+Non fanno mai chiamate di rete (I/O) e non chiamano altri oggetti sincronizzati.
+Ogni metodo dura pochi microsecondi => nessun thread resta bloccato a lungo.
 */
 
 public class AggregatorRegistry {
@@ -77,6 +86,7 @@ public class AggregatorRegistry {
     };
 
     // Estrae il numero finale da "peerX" --> se c'è un errore lo butta in fondo alla lista
+    // ("peer" sono 4 caratteri, quindi substring(4) lascia solo il numero)
     private static int suffisso(String peerId) {
         try{
             return Integer.parseInt(peerId.substring(4));
@@ -85,14 +95,14 @@ public class AggregatorRegistry {
         }
     }
 
-    // Dati protetti dal monitor (accessibili solo tramite metodi synchronized)
+    // Dati protetti dal monitor (accessibili solo tramite metodi synchronized). Sono private: nessuno fuori da questa classe può toccarli senza passare dal monitor.
     private final HashMap<String, ArrayList<String>> possessori = new HashMap<>(); //Indice dei file: dato il nome della risorsa, mi dice quali peer ce l'hanno
     private final HashMap<String, PeerInfo> registro = new HashMap<>(); // Anagrafica dei nodi: dal nome del peer ricavo subito IP, porta e se è attivo
-    private int prossimoId = 0;
+    private int prossimoId = 0; // contatore per assegnare peer0, peer1, peer2, ...
 
     /*Registra il nodo e tutte le sue rilevazioni in un'unica operazione atomica.
-      I nomi sono già stati letti dal socket (fuori dal onitor) -> un client lento non blocca gli altri.
-      Gli id peerN non vengono mai usati*/
+      I nomi sono già stati letti dal socket (fuori dal monitor) -> un client lento non blocca gli altri.
+      Gli id peerN non vengono mai riutilizzati (il contatore cresce soltanto)*/
     public synchronized String completaRegistrazione(String host, int porta, List<String> nomi){
         String peerId = "peer" + prossimoId;
         prossimoId++;
@@ -103,7 +113,7 @@ public class AggregatorRegistry {
         return peerId;
     }
 
-    // Usato da ADDED e da RESALE OK. Ritorna false se il peer non è registrato.
+    // Usato da ADDED e da RELEASE OK. Ritorna false se il peer non è registrato.
     public synchronized boolean aggiungiRisorsa( String peerId, String risorsa){
         if(!registro.containsKey(peerId)){
             return false;
@@ -118,6 +128,7 @@ public class AggregatorRegistry {
         return rimuoviInterno(peerId, risorsa);
     }
 
+    // Chiamato quando un nodo fa quit o cade. Non cancella le sue risorse dalla tabella
     public synchronized void disconnetti(String peerId) {
         PeerInfo info= registro.get(peerId);
         if (info != null){
@@ -127,13 +138,19 @@ public class AggregatorRegistry {
 
     /*Cerca chi ha il file. Mentre scorre la lista, ne approfitta per cancellare
     i nodi crashati o quelli a cui ci siamo già collegati senza successo (esclusi).
-    Alla fine sceglie il peer con il numero più basso */
+    Alla fine sceglie il peer con il numero più basso.
+    
+    Parametri:
+    -richiedente = chi vuole scaricare (non può scaricare da se stesso)
+    -risorsa = nome della rilevazione cercata
+    -esclusi = peer già provati e falliti in questo download (Non deve essere null) */
     public synchronized EsitoRisolvi risolvi(String richiedente, String risorsa, Set<String> esclusi) {
         ArrayList<String> lista = possessori.get(risorsa);
         if (lista==null){
             return EsitoRisolvi.nessuno();
         }
         String migliore = null;
+        // Si usa l'Iterator perché dentro il ciclo si rimuovono elementi dalla lista.
         Iterator<String> it = lista.iterator();
         while (it.hasNext()) {
             String p = it.next();
@@ -145,6 +162,7 @@ public class AggregatorRegistry {
                 it.remove();
                 continue;
             }
+            // Il richiedente viene solo saltato (non rimosso): possiede davvero la risorsa, semplicemente non può essere il proprio fornitore.
             if (p.equals(richiedente)){
                 continue;
             }
@@ -153,6 +171,7 @@ public class AggregatorRegistry {
                 migliore = p;
             }
         }
+        // Se la pulizia ha svuotato la lista, si toglie la risorsa dalla tabella (così non resta una riga vuota nel listdata).
         if (lista.isEmpty()) {
             possessori.remove(risorsa);
         }
@@ -179,14 +198,17 @@ public class AggregatorRegistry {
 
     /*Restituisce l'elenco delle risorse, una riga per risorsa - il nome seguito dai peer che la possiedono.
       Se nome è null restituisce tutte le risorse, altrimenti solo quella indicata.
-      Le risorse sono in oridne alfabetico, i peer in ordine numerico. Include anche i peer disconnessi, perchè le loro risorse restano in tabella. */
+      Le risorse sono in ordine alfabetico, i peer in ordine numerico. Include anche i peer disconnessi, perchè le loro risorse restano in tabella.
+      Restituisce stringhe NUOVE (una copia): nessun riferimento ai dati interni esce dal monitor. */
     public synchronized List<String> elencoRisorse(String nome) {
         ArrayList<String> righe= new ArrayList<>();
+        // TreeSet = insieme che tiene i nomi ordinati alfabeticamente
         TreeSet<String> nomi = new TreeSet<>(possessori.keySet());
         for (String risorsa : nomi){
             if ( nome != null && !nome.equals(risorsa)){
-                continue;
+                continue; // è stato chiesto un nome preciso e questo non è lui: salta
             }
+            // Copia della lista dei peer: si ordina la copia, non quella originale
             ArrayList<String> peers = new ArrayList<>(possessori.get(risorsa));
             Collections.sort(peers, PER_SUFFISSO);
             StringBuilder sb = new StringBuilder(risorsa);
@@ -216,14 +238,15 @@ public class AggregatorRegistry {
         return info == null ? null : info.copia();
     }
 
-    //Metodi privati ausiliari. Evitano di duplicare il codice per l'inserimento e la rimozione nelle HashMap
+    //Metodi privati ausiliari. Evitano di duplicare il codice per l'inserimento e la rimozione nelle HashMap.
+    //Non sono synchronized: li chiamano solo metodi che sono già dentro il monitor.
     private void aggiungiInterno(String peerId, String risorsa) {
         ArrayList<String> lista = possessori.get(risorsa);
         if (lista == null){
-            lista = new ArrayList<>();
+            lista = new ArrayList<>(); // prima volta che questa risorsa compare: crea la lista
             possessori.put(risorsa, lista);
         }
-        if (!lista.contains(peerId)) {
+        if (!lista.contains(peerId)) { // evita duplicati dello stesso peer
             lista.add(peerId);
         }
     }
@@ -234,7 +257,7 @@ public class AggregatorRegistry {
             return false;
         }
         if (lista.isEmpty()) {
-            possessori.remove(risorsa);
+            possessori.remove(risorsa); // nessuno la possiede più: via anche la riga
         }
         return true;
     }
