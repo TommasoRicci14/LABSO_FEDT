@@ -17,11 +17,11 @@ public class ClientConsole {
     private final String peerId;
     private final AggregatorLink link;
     private final LocalStore store;
-    private final DownloadManager download;
-    private final PeerServer peerServer;
+    private final RetrievalCoordinator download;
+    private final NodeListener peerServer;
 
     public ClientConsole(String peerId, AggregatorLink link, LocalStore store,
-                         DownloadManager download, PeerServer peerServer) {
+                         RetrievalCoordinator download, NodeListener peerServer) {
         this.peerId = peerId;
         this.link = link;
         this.store = store;
