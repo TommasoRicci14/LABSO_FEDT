@@ -9,7 +9,7 @@ import java.util.List;
  Token di peer diversi sono indipendenti: un download da peer0 e uno da peer3 possono procedere in parallelo.
  
  Sincronizzazione: SOLO synchronized + wait()/notifyAll(). Il monitor è l'istanza stessa di questa classe.
- Perché è una classe SEPARATA da AggregatorState: chi aspetta un token resta fermo dentro wait() anche a lungo. 
+ Perché è una classe SEPARATA da AggregatorRegistry: chi aspetta un token resta fermo dentro wait() anche a lungo. 
  Se questa logica stesse nello stesso monitor della tabella delle risorse, un nodo in attesa bloccherebbe tutta la rete 
  (nessuno riuscirebbe nemmeno a fare una listdata). 
  Il NodeHandler quindi chiama questa classe FUORI da qualunque altro monitor.

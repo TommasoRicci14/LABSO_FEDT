@@ -16,7 +16,7 @@ COSA CONTIENE
 
 PERCHÉ SERVE LA SINCRONIZZAZIONE
 L'aggregatore ha un thread per ogni nodo connesso (NodeHandler). Tutti questi thread
-leggono e modificano quetsa stessa tabella. Senza protezione, due thread che la toccano
+leggono e modificano questa stessa tabella. Senza protezione, due thread che la toccano
 insieme potrebbero lasciarla in uno stato corrotto (es. due REGISTER simultanee che
 assegnano lo stesso peerId). Per evitarlo, tutti i metodi pubblici sono synchronized:
 il "monitor" è l'istanza stessa, e solo UN thread alla volta può essere dentro uno
